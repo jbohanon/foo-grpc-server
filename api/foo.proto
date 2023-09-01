@@ -1,0 +1,11 @@
+syntax = "proto3";
+option go_package = "github.com/jbohanon/foo-grpc-server";
+
+package api;
+
+service Foo {
+  rpc GetFoo(FooRequest) returns (FooResponse) {}
+}
+
+message FooRequest {}
+message FooResponse {}
