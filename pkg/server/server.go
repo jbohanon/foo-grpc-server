@@ -27,23 +27,23 @@ func (s *fooServer) GetFoo(ctx context.Context, req *pb.FooRequest) (*pb.FooResp
 	return &pb.FooResponse{}, nil
 }
 
-func serveHealth() {
+func serveHealth(cancel context.CancelFunc) {
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	http.HandleFunc("/healthbad", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
+	http.HandleFunc("/quitquitquit", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("quitquitquit request received. shutting down.")
+		cancel()
+	})
 	addr := fmt.Sprintf("localhost:%d", *healthport)
 	log.Printf("health server listening on %s", addr)
 	http.ListenAndServe(addr, nil)
 }
 
-func main() {
-	flag.Parse()
-
-	go serveHealth()
-
+func serveGrpc(cancel context.CancelFunc) {
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -52,5 +52,21 @@ func main() {
 	grpcServer := grpc.NewServer(opts...)
 	pb.RegisterFooServer(grpcServer, &fooServer{})
 	log.Println("gRPC FooServer listening on localhost:5000")
-	grpcServer.Serve(lis)
+
+	if err = grpcServer.Serve(lis); err != nil {
+		cancel()
+	}
+}
+
+func main() {
+	flag.Parse()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go serveHealth(cancel)
+
+	go serveGrpc(cancel)
+
+	<-ctx.Done()
+
 }
